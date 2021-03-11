@@ -117,6 +117,10 @@ class dnn_test(NewOpenCVTests):
             return False
         return True
 
+    def test_getAvailableTargets(self):
+        targets = cv.dnn.getAvailableTargets(cv.dnn.DNN_BACKEND_OPENCV)
+        self.assertTrue(cv.dnn.DNN_TARGET_CPU in targets)
+
     def test_blobFromImage(self):
         np.random.seed(324)
 
@@ -191,6 +195,25 @@ class dnn_test(NewOpenCVTests):
 
         out = model.predict(frame)
         normAssert(self, out, ref)
+
+
+    def test_textdetection_model(self):
+        img_path = self.find_dnn_file("dnn/text_det_test1.png")
+        weights = self.find_dnn_file("dnn/onnx/models/DB_TD500_resnet50.onnx", required=False)
+        if weights is None:
+            raise unittest.SkipTest("Missing DNN test files (onnx/models/DB_TD500_resnet50.onnx). Verify OPENCV_DNN_TEST_DATA_PATH configuration parameter.")
+
+        frame = cv.imread(img_path)
+        scale = 1.0 / 255.0
+        size = (736, 736)
+        mean = (122.67891434, 116.66876762, 104.00698793)
+
+        model = cv.dnn_TextDetectionModel_DB(weights)
+        model.setInputParams(scale, size, mean)
+        out, _ = model.detect(frame)
+
+        self.assertTrue(type(out) == list)
+        self.assertTrue(np.array(out).shape == (2, 4, 2))
 
 
     def test_face_detection(self):
@@ -274,6 +297,12 @@ class dnn_test(NewOpenCVTests):
                 ret, result = outs[i].get(timeoutNs=float(timeout))
                 self.assertTrue(ret)
                 normAssert(self, refs[i], result, 'Index: %d' % i, 1e-10)
+
+    def test_nms(self):
+        confs = (1, 1)
+        rects = ((0, 0, 0.4, 0.4), (0, 0, 0.2, 0.4)) # 0.5 overlap
+
+        self.assertTrue(all(cv.dnn.NMSBoxes(rects, confs, 0, 0.6).ravel() == (0, 1)))
 
     def test_custom_layer(self):
         class CropLayer(object):

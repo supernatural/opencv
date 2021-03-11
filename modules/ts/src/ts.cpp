@@ -774,6 +774,7 @@ static bool checkTestData = cv::utils::getConfigurationParameterBool("OPENCV_TES
 bool skipUnstableTests = false;
 bool runBigDataTests = false;
 int testThreads = 0;
+int debugLevel = (int)cv::utils::getConfigurationParameterSizeT("OPENCV_TEST_DEBUG", 0);
 
 
 static size_t memory_usage_base = 0;
@@ -883,6 +884,7 @@ void parseCustomOptions(int argc, char **argv)
         "{ test_threads       |-1       |the number of worker threads, if parallel execution is enabled}"
         "{ skip_unstable      |false    |skip unstable tests }"
         "{ test_bigdata       |false    |run BigData tests (>=2Gb) }"
+        "{ test_debug         |         |0 - no debug (default), 1 - basic test debug information, >1 - extra debug information }"
         "{ test_require_data  |") + (checkTestData ? "true" : "false") + string("|fail on missing non-required test data instead of skip (env:OPENCV_TEST_REQUIRE_DATA)}"
         CV_TEST_TAGS_PARAMS
         "{ h   help           |false    |print help info                          }"
@@ -909,6 +911,14 @@ void parseCustomOptions(int argc, char **argv)
 
     skipUnstableTests = parser.get<bool>("skip_unstable");
     runBigDataTests = parser.get<bool>("test_bigdata");
+    if (parser.has("test_debug"))
+    {
+        cv::String s = parser.get<cv::String>("test_debug");
+        if (s.empty() || s == "true")
+            debugLevel = 1;
+        else
+            debugLevel = parser.get<int>("test_debug");
+    }
     if (parser.has("test_require_data"))
         checkTestData = parser.get<bool>("test_require_data");
 
@@ -1008,10 +1018,10 @@ static std::string findData(const std::string& relative_path, bool required, boo
                 CHECK_FILE_WITH_PREFIX(prefix, result_);
                 if (!required && !result_.empty())
                 {
-                    std::cout << "TEST ERROR: Don't use 'optional' findData() for " << relative_path << std::endl;
                     static bool checkOptionalFlag = cv::utils::getConfigurationParameterBool("OPENCV_TEST_CHECK_OPTIONAL_DATA", false);
                     if (checkOptionalFlag)
                     {
+                        std::cout << "TEST ERROR: Don't use 'optional' findData() for " << relative_path << std::endl;
                         CV_Assert(required || result_.empty());
                     }
                 }
@@ -1099,14 +1109,6 @@ inline static void recordPropertyVerbose(const std::string & property,
     }
 }
 
-inline static void recordPropertyVerbose(const std::string& property, const std::string& msg,
-                                         const char* value, const char* build_value = NULL)
-{
-    return recordPropertyVerbose(property, msg,
-        value ? std::string(value) : std::string(),
-        build_value ? std::string(build_value) : std::string());
-}
-
 #ifdef _DEBUG
 #define CV_TEST_BUILD_CONFIG "Debug"
 #else
@@ -1120,10 +1122,19 @@ void SystemInfoCollector::OnTestProgramStart(const testing::UnitTest&)
     recordPropertyVerbose("cv_vcs_version", "OpenCV VCS version", getSnippetFromConfig("Version control:", "\n"));
     recordPropertyVerbose("cv_build_type", "Build type", getSnippetFromConfig("Configuration:", "\n"), CV_TEST_BUILD_CONFIG);
     recordPropertyVerbose("cv_compiler", "Compiler", getSnippetFromConfig("C++ Compiler:", "\n"));
-    recordPropertyVerbose("cv_parallel_framework", "Parallel framework", cv::currentParallelFramework());
+    const char* parallelFramework = cv::currentParallelFramework();
+    if (parallelFramework)
+    {
+        ::testing::Test::RecordProperty("cv_parallel_framework", parallelFramework);
+        int threads = testThreads > 0 ? testThreads : cv::getNumThreads();
+        ::testing::Test::RecordProperty("cv_parallel_threads", threads);
+        std::cout << "Parallel framework: " << parallelFramework << " (nthreads=" << threads << ")" << std::endl;
+    }
     recordPropertyVerbose("cv_cpu_features", "CPU features", cv::getCPUFeaturesLine());
 #ifdef HAVE_IPP
-    recordPropertyVerbose("cv_ipp_version", "Intel(R) IPP version", cv::ipp::useIPP() ? cv::ipp::getIppVersion() :  "disabled");
+    recordPropertyVerbose("cv_ipp_version", "Intel(R) IPP version", cv::ipp::useIPP() ? cv::ipp::getIppVersion() : "disabled");
+    if (cv::ipp::useIPP())
+        recordPropertyVerbose("cv_ipp_features", "Intel(R) IPP features code", cv::format("0x%llx", cv::ipp::getIppTopFeatures()));
 #endif
 #ifdef HAVE_OPENCL
     cv::dumpOpenCLInformation();

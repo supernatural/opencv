@@ -103,9 +103,12 @@ public:
     {
 #ifdef HAVE_INF_ENGINE
         if (backendId == DNN_BACKEND_INFERENCE_ENGINE_NN_BUILDER_2019 || backendId == DNN_BACKEND_INFERENCE_ENGINE_NGRAPH)
+        {
+            bool isMyriad = preferableTarget == DNN_TARGET_MYRIAD || preferableTarget == DNN_TARGET_HDDL;
             return INF_ENGINE_VER_MAJOR_GE(INF_ENGINE_RELEASE_2019R1) &&
-                   (preferableTarget != DNN_TARGET_MYRIAD ||
+                   (!isMyriad ||
                     (dstRanges.size() == 4 && paddings[0].first == 0 && paddings[0].second == 0));
+        }
 #endif
         return backendId == DNN_BACKEND_OPENCV ||
                backendId == DNN_BACKEND_CUDA ||
@@ -212,7 +215,7 @@ public:
         return Ptr<BackendNode>();
     }
 
-#ifdef HAVE_INF_ENGINE
+#ifdef HAVE_DNN_IE_NN_BUILDER_2019
     virtual Ptr<BackendNode> initInfEngine(const std::vector<Ptr<BackendWrapper> >&) CV_OVERRIDE
     {
         InferenceEngine::Builder::Layer ieLayer(name);

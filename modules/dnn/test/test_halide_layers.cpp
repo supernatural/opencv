@@ -357,9 +357,9 @@ TEST_P(MaxPooling, Accuracy)
         applyTestTag(CV_TEST_TAG_DNN_SKIP_IE_MYRIAD_X, CV_TEST_TAG_DNN_SKIP_IE_VERSION);
 #endif
 
-#if defined(INF_ENGINE_RELEASE)
-    if (backendId == DNN_BACKEND_INFERENCE_ENGINE_NGRAPH && stride != Size(1, 1) && pad != Size(0, 0))
-        applyTestTag(CV_TEST_TAG_DNN_SKIP_IE_NGRAPH);
+#if defined(INF_ENGINE_RELEASE) && INF_ENGINE_VER_MAJOR_GE(2020020000)
+    if (backendId == DNN_BACKEND_INFERENCE_ENGINE_NGRAPH && targetId == DNN_TARGET_MYRIAD)
+        applyTestTag(CV_TEST_TAG_DNN_SKIP_IE_MYRIAD, CV_TEST_TAG_DNN_SKIP_IE_NGRAPH, CV_TEST_TAG_DNN_SKIP_IE_VERSION);
 #endif
 
     LayerParams lp;
@@ -399,7 +399,8 @@ TEST_P(FullyConnected, Accuracy)
     bool hasBias = get<3>(GetParam());
     Backend backendId = get<0>(get<4>(GetParam()));
     Target targetId = get<1>(get<4>(GetParam()));
-    if (backendId == DNN_BACKEND_INFERENCE_ENGINE_NN_BUILDER_2019 && (targetId == DNN_TARGET_OPENCL_FP16 ||
+    if ((backendId == DNN_BACKEND_INFERENCE_ENGINE_NN_BUILDER_2019 ||
+         backendId == DNN_BACKEND_INFERENCE_ENGINE_NGRAPH) && (targetId == DNN_TARGET_OPENCL_FP16 ||
        (targetId == DNN_TARGET_MYRIAD && getInferenceEngineVPUType() == CV_DNN_INFERENCE_ENGINE_VPU_TYPE_MYRIAD_X))) {
         applyTestTag(CV_TEST_TAG_DNN_SKIP_IE_OPENCL_FP16);
         applyTestTag(CV_TEST_TAG_DNN_SKIP_IE_MYRIAD_X);
@@ -446,7 +447,7 @@ TEST_P(SoftMax, Accuracy)
     Backend backendId = get<0>(get<1>(GetParam()));
     Target targetId = get<1>(get<1>(GetParam()));
     LayerParams lp;
-    lp.type = "SoftMax";
+    lp.type = "Softmax";
     lp.name = "testLayer";
 
     int sz[] = {1, inChannels, 1, 1};
@@ -629,6 +630,31 @@ INSTANTIATE_TEST_CASE_P(Layer_Test_Halide, Power, Combine(
                                Vec3f(1.0f, 0.9f, 1.1f), Vec3f(1.0f, 1.1f, 0.9f),
                                Vec3f(1.1f, 0.9f, 1.0f), Vec3f(1.1f, 1.0f, 0.9f)),
                         dnnBackendsAndTargetsWithHalide()
+));
+
+typedef TestWithParam<tuple<Vec3f, tuple<Backend, Target> > > Exp;
+TEST_P(Exp, Accuracy)
+{
+    float base = get<0>(GetParam())[0];
+    float scale = get<0>(GetParam())[1];
+    float shift = get<0>(GetParam())[2];
+    Backend backendId = get<0>(get<1>(GetParam()));
+    Target targetId = get<1>(get<1>(GetParam()));
+
+    LayerParams lp;
+    lp.set("base", base);
+    lp.set("scale", scale);
+    lp.set("shift", shift);
+    lp.type = "Exp";
+    lp.name = "testLayer";
+    testInPlaceActivation(lp, backendId, targetId);
+}
+
+INSTANTIATE_TEST_CASE_P(Layer_Test_Halide, Exp, Combine(
+/*base, scale, shift*/ Values(Vec3f(0.9f, -1.0f, 1.1f), Vec3f(0.9f, 1.1f, -1.0f),
+                              Vec3f(-1.0f, 0.9f, 1.1f), Vec3f(-1.0f, 1.1f, 0.9f),
+                              Vec3f(1.1f, 0.9f, -1.0f), Vec3f(1.1f, -1.0f, 0.9f)),
+                       dnnBackendsAndTargetsWithHalide()
 ));
 
 TEST_P(Test_Halide_layers, ChannelsPReLU)
